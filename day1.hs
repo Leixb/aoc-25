@@ -1,18 +1,13 @@
 module Main where
 
 import Control.Arrow
+import Control.Monad
 import Data.List
 import Data.Map
 
-parse = transpose . fmap (fmap read . words) . lines <$> getContents
-
-part1, part2 :: [[Int]] -> Int
 part1 [a, b] = sum $ abs <$> zipWith (-) (sort a) (sort b)
-part1 _ = undefined
-
-part2 [a, b] = sum $ zipWith (*) a $ fmap (flip (findWithDefault 0) b') a
+part2 [a, b] = sum $ ap (zipWith (*)) (fmap (flip (findWithDefault 0) (freq b))) a
   where
-    b' = fromListWith (+) $ fmap (,1) b
-part2 _ = undefined
+    freq = fromListWith (+) . fmap (,1)
 
-main = parse >>= print . (part1 &&& part2)
+main = getContents >>= (print . (part1 &&& part2)) . transpose . fmap (fmap read . words) . lines
