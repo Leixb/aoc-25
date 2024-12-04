@@ -42,31 +42,21 @@ check b p i d
 checkAll :: Board -> Pos -> Int
 checkAll b p = length . filter (check b p 0) $ [N, NE, E, SE, S, SW, W, NW]
 
-checkAll2 b p = if check2 b p 0 then 1 else 0
-
-solve b = checkAll b <$> indices b
-solve2 b = checkAll2 b <$> indices b
+part1 b = sum $ checkAll b <$> indices b
+part2 b = length . filter (flip (check2 b) 0) $ indices b
 
 check2 :: Board -> Pos -> Int -> Bool
 check2 b p i
     | i >= length target = True
     | not ok = False
     | (b ! p) /= 'A' = False
-    | not (
-        ((b ! nw) `elem` "SM") ||
-        ((b ! ne) `elem` "SM") ||
-        ((b ! sw) `elem` "SM") ||
-        ((b ! se) `elem` "SM")) = False
-    | otherwise = valid
+    | not (all (`elem` "SM") (head letters)) = False
+    | otherwise = "SSMM" `elem` letters
   where
-    ok = all (inBounds (bounds b)) [nw, se, sw, nw]
-    ne = move NE p
-    se = move SE p
-    sw = move SW p
-    nw = move NW p
-    letters = rots $ fmap (b!) [ne, nw, sw, se]
-    valid = "SSMM" `elem` letters
+    ok = all (inBounds (bounds b)) moves
+    moves = flip move p <$> [NE, SE, SW, NW]
+    letters = rots $ fmap (b!) moves
 
-rots xs = init (zipWith (++) (tails xs) (inits xs))
+rots xs = init $ zipWith (++) (tails xs) (inits xs)
 
-main = getContents >>= print . sum . solve2 . parse
+main = getContents >>= print . (part1 &&& part2) . parse
