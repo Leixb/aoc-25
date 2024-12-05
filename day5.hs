@@ -1,6 +1,7 @@
 module Main where
 
 import Control.Monad
+import Control.Arrow
 import Data.Char
 import Data.List qualified as L
 import Data.Map
@@ -24,4 +25,18 @@ getMiddle = ap (!!) (flip div 2 . length)
 
 part1 m = sum . fmap getMiddle . L.filter (verify m)
 
-main = getContents >>= print . uncurry part1 . fst . last . readP_to_S parse
+getOrigin :: Map Int (Set Int) -> Set Int -> Int
+getOrigin m l = head $ L.filter (S.disjoint l . preds) (S.toList l)
+  where
+    preds = flip (findWithDefault S.empty) m
+
+order :: Map Int (Set Int) -> Set Int -> [Int]
+order m s
+  | S.null s = []
+  | otherwise = h : order m (S.delete h s)
+    where
+      h = getOrigin m s
+
+part2 m = sum . fmap (getMiddle . order m . S.fromList) . L.filter (not . verify m)
+
+main = getContents >>= print . (uncurry part1 &&& uncurry part2) . fst . last . readP_to_S parse
