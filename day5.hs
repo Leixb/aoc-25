@@ -1,6 +1,5 @@
 module Main where
 
-import Control.Monad
 import Control.Arrow
 import Data.Char
 import Data.List qualified as L
@@ -9,19 +8,18 @@ import Data.Set
 import Data.Set qualified as S
 import Text.ParserCombinators.ReadP
 
-parseInt :: ReadP Int
+parse = (,) <$> (fromListWith S.union <$> parseOrder) <*> (eol *> parseUpdate)
+parseOrder = endBy (flip (,) <$> (S.singleton <$> parseInt <* char '|') <*> parseInt) eol
+parseUpdate = endBy (sepBy parseInt (char ',')) eol
 parseInt = read <$> munch1 isDigit
-
-parse = (,) <$> (fromListWith S.union <$> parseOrder) <*> (char '\n' *> parseUpdate)
-parseOrder = endBy (flip (,) <$> (S.singleton <$> parseInt <* char '|') <*> parseInt) (char '\n')
-parseUpdate = endBy (sepBy parseInt (char ',')) (char '\n')
+eol = char '\n'
 
 verify :: Map Int (Set Int) -> [Int] -> Bool
-verify m = and . ap (zipWith fn) (scanl (flip S.insert) S.empty)
+verify m = and . (zipWith fn <*> scanl (flip S.insert) S.empty)
   where
     fn a = flip S.isSubsetOf (findWithDefault S.empty a m)
 
-getMiddle = ap (!!) (flip div 2 . length)
+getMiddle = (!!) <*> ((`div` 2) . length)
 
 part1 m = sum . fmap getMiddle . L.filter (verify m)
 
