@@ -4,6 +4,7 @@ import Control.Arrow
 import Control.Monad.Reader
 import Data.Array.Unboxed
 import Data.List
+import qualified Data.Set as S
 
 type Pos = (Int, Int)
 type Board = UArray Pos Char
@@ -39,7 +40,7 @@ solve p = do
 
     fmap (++ nines) $ if null rest then return [] else solve rest
 
-scoreTrail = fmap (length . nub) . solve . pure
+scoreTrail = fmap (S.size . S.fromList) . solve . pure
 scoreTrail' = fmap length . solve . pure
 
 part1 = sum . runReader (origins >>= mapM scoreTrail)
