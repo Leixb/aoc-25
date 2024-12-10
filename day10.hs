@@ -26,24 +26,23 @@ moves :: Pos -> Prob [Pos]
 moves pos =
     ask >>= \board ->
         let curr = board ! pos
-         in return . filter ((== succ curr) . (board !)) . filter (inRange (bounds board)) $ fmap (.+. pos) deltas
+         in return . filter ((== succ curr) . (board !)) . filter (inRange (bounds board)) $ (.+. pos) <$> deltas
   where
     deltas = [(1, 0), (0, 1), (-1, 0), (0, -1)]
     (ax, ay) .+. (bx, by) = (ax + bx, ay + by)
 
-solve :: [Pos] -> Prob [Pos]
-solve p = do
+followTrail :: [Pos] -> Prob [Pos]
+followTrail p = do
     board <- ask
     nxt <- concat <$> mapM moves p
 
     let (nines, rest) = partition ((== '9') . (board !)) nxt
 
-    fmap (++ nines) $ if null rest then return [] else solve rest
+    fmap (++ nines) $ if null rest then return [] else followTrail rest
 
-scoreTrail = fmap (S.size . S.fromList) . solve . pure
-scoreTrail' = fmap length . solve . pure
+solve fn = sum . fmap fn . runReader (origins >>= mapM (followTrail . pure))
 
-part1 = sum . runReader (origins >>= mapM scoreTrail)
-part2 = sum . runReader (origins >>= mapM scoreTrail')
+part1 = solve $ S.size . S.fromList
+part2 = solve length
 
 main = getContents >>= print . (part1 &&& part2) . parse
