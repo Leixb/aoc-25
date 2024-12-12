@@ -5,6 +5,8 @@ import Control.Monad
 import Control.Monad.RWS
 import Data.Array.Unboxed
 import Data.Monoid
+import Data.List
+import Data.Ord
 import Data.Functor
 import Data.Set qualified as S
 
@@ -19,13 +21,13 @@ parse s = listArray ((1, 1), (n, m)) $ concat l
     n = length l
     m = length $ head l
 
-moves :: Pos -> Prob [Pos]
-moves pos = ask >>= \board -> return . filter (inRange (bounds board)) $ (.+. pos) <$> deltas
+moves :: Pos -> [Pos]
+moves pos = (.+. pos) <$> deltas
   where
     deltas = [(1, 0), (0, 1), (-1, 0), (0, -1)]
     (ax, ay) .+. (bx, by) = (ax + bx, ay + by)
 
-explore :: Pos -> Prob (Sum Int, Sum Int)
+explore :: Pos -> Prob (S.Set Pos, Sum Int)
 explore p = do
     board <- ask
     seen <- get
@@ -34,16 +36,32 @@ explore p = do
         then return mempty
         else do
             modify $ S.insert p
-            valid <- moves p
-            let equals = filter ((== (board ! p)) . (board !)) valid
-                walls = 4 - length equals
+            let allMoves = S.fromList $ moves p
+                (valid, outside) = S.partition (inRange (bounds board)) allMoves
+                (equals, diff) = S.partition ((== (board ! p)) . (board !)) valid
+                walls = 4 - S.size equals
 
-            neighbors <- mconcat <$> mapM explore equals
+            neighbors <- mconcat <$> mapM explore (S.toList equals)
 
-            return $ neighbors <> (Sum walls, Sum 1)
+            return $ neighbors <> (outside <> diff, Sum 1)
 
-exploreAll :: Prob Int
-exploreAll = sum . fmap (uncurry (*) . (getSum *** getSum)) <$> (ask >>= mapM explore . indices)
+-- exploreAll :: Prob Int
+-- exploreAll = sum . fmap (uncurry (*) . (S.size *** getSum)) <$> (ask >>= mapM explore . indices)
+exploreAll = filter ((/=0) . snd) . fmap (countSides *** getSum) <$> (ask >>= mapM explore . indices)
+
+-- countSides :: S.Set Pos -> [Pos]
+countSides s = y
+    where
+        l = S.toList s
+        -- x = sum . fmap (succ . length . filter (/=(-1)) . diffs . fmap snd) $ groupBy (\a b -> fst a == fst b) $ sort l
+        -- y = sum . fmap (succ . length . filter (/=(-1)) . diffs . fmap fst) $ groupBy (\a b -> snd a == snd b) $ sortOn snd l
+        -- x = fmap (diffs . fmap snd) $ groupBy (\a b -> fst a == fst b) $ sort l
+        -- x = fmap (fmap snd) $ groupBy (\a b -> fst a == fst b) $ sort l
+        x = groupBy (\a b -> fst a == fst b) $ sort l
+        y = groupBy (\a b -> snd a == snd b) $ sortOn snd l
+        -- y = sum . fmap (succ . length . filter (/=(-1)) . diffs . fmap fst) $ groupBy (\a b -> snd a == snd b) $ sortOn snd l
+
+        diffs l = zipWith (-) l (tail l)
 
 part1 = fst . flip (evalRWS exploreAll) S.empty
 
