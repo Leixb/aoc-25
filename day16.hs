@@ -1,16 +1,21 @@
 module Main where
 
 import Control.Arrow
+import Control.Monad
 import Control.Monad.RWS
 import Control.Monad.Trans.Maybe
 import Data.Array.Unboxed
 import Data.List
+import Data.Map qualified as M
+import Data.Maybe
 import Data.Set qualified as S
 
-type Pos = (Int, Int)
 data Dir = N | S | W | E deriving (Show, Eq, Ord)
 type Maze = UArray Pos Char
-type Problem = RWS Maze () (S.Set (Pos, Dir), S.Set (Int, (Pos, Dir)))
+type Pos = (Int, Int)
+type Node = (Pos, Dir)
+type CostNode = (Int, Node)
+type Problem = RWS Maze [(Node, [Node])] (M.Map Node Int, S.Set (CostNode, Maybe Node))
 
 parse = toMaze . lines
 
@@ -20,7 +25,7 @@ toMaze b = listArray ((0, 0), (n - 1, m - 1)) $ concat b
     n = length b
     m = length $ head b
 
-next :: Int -> (Pos, Dir) -> Problem [(Int, (Pos, Dir))]
+next :: Int -> (Pos, Dir) -> Problem [CostNode]
 next c (p, d) = do
     m <- ask
 
@@ -38,28 +43,43 @@ rot d
     | d `elem` [N, S] = [E, W]
     | otherwise = [N, S]
 
-dijkstra :: MaybeT Problem (Int, (Pos, Dir))
+dijkstra :: MaybeT Problem ()
 dijkstra = do
     m <- ask
     visited <- gets fst
-    Just ((cost, vertex@(p, _)), queue) <- gets (S.minView . snd)
+    Just (((cost, vertex@(p, _)), father), queue) <- gets (S.minView . snd)
 
-    if m ! p == 'E'
-        then return (cost, vertex)
-        else
-            ( if vertex `S.member` visited
-                then modify (second $ const queue)
-                else do
-                    queue' <- lift $ foldr S.insert queue <$> next cost vertex
-                    put (S.insert vertex visited, queue')
-            )
-                *> dijkstra
+    let (prevCost, visited') = M.insertLookupWithKey (\_ a _ -> a) vertex cost visited
 
-part1 b = do
+    case prevCost of
+        Nothing -> do
+            queue' <- lift $ foldr S.insert queue <$> (fmap (,Just vertex) <$> next cost vertex)
+            put (visited', queue')
+            tell [(vertex, maybeToList father)]
+        Just c -> do
+            if c == cost
+                then tell [(vertex, maybeToList father)]
+                else guard $ m ! p /= 'E'
+            put (visited, queue)
+    dijkstra
+
+solve b = do
     start <- getStart b
-    fst <$> fst (evalRWS (runMaybeT dijkstra) b (S.empty, S.singleton start))
+    end <- getEnd b
+    let ((m, _), w) = execRWS (runMaybeT dijkstra) b (M.empty, S.singleton (start, Nothing))
+        parents = M.fromListWith (++) w
+        endDirs = (end,) <$> [N, S, E, W]
+        min = minimum $ mapMaybe (`M.lookup` m) endDirs
+        ends = filter ((== Just min) . (`M.lookup` m)) endDirs
+        part2 =
+            S.size . S.fromList . fmap fst . concat . takeWhile (not . null) $
+                iterate (>>= flip (M.findWithDefault []) parents) ends
+    return (min, part2)
 
-getStart :: Maze -> Maybe (Int, (Pos, Dir))
+getStart :: Maze -> Maybe CostNode
 getStart = fmap ((0,) . (,E) . fst) . find ((== 'S') . snd) . assocs
 
-main = getContents >>= print . part1 . parse
+getEnd :: Maze -> Maybe Pos
+getEnd = fmap fst . find ((== 'E') . snd) . assocs
+
+main = getContents >>= print . solve . parse
