@@ -1,9 +1,8 @@
-{-# LANGUAGE LambdaCase #-}
-
 module Main where
 
 import Control.Arrow
 import Control.Monad.RWS
+import Control.Monad.Trans.Maybe
 import Data.Array.Unboxed
 import Data.List
 import Data.Set qualified as S
@@ -39,23 +38,26 @@ rot d
     | d `elem` [N, S] = [E, W]
     | otherwise = [N, S]
 
-dijkstra :: Problem (Maybe (Int, (Pos, Dir)))
+dijkstra :: MaybeT Problem (Int, (Pos, Dir))
 dijkstra = do
     m <- ask
     visited <- gets fst
-    gets (S.minView . snd) >>= \case
-        Nothing -> return Nothing
-        Just ((cost, vertex@(p, _)), queue)
-            | m ! p == 'E' -> return $ Just (cost, vertex)
-            | vertex `S.member` visited -> (modify (second $ const queue) *> dijkstra)
-            | otherwise -> do
-                queue' <- foldr S.insert queue <$> next cost vertex
-                put (S.insert vertex visited, queue')
-                dijkstra
+    Just ((cost, vertex@(p, _)), queue) <- gets (S.minView . snd)
+
+    if m ! p == 'E'
+        then return (cost, vertex)
+        else
+            ( if vertex `S.member` visited
+                then modify (second $ const queue)
+                else do
+                    queue' <- lift $ foldr S.insert queue <$> next cost vertex
+                    put (S.insert vertex visited, queue')
+            )
+                *> dijkstra
 
 part1 b = do
     start <- getStart b
-    fst <$> fst (evalRWS dijkstra b (S.empty, S.singleton start))
+    fst <$> fst (evalRWS (runMaybeT dijkstra) b (S.empty, S.singleton start))
 
 getStart :: Maze -> Maybe (Int, (Pos, Dir))
 getStart = fmap ((0,) . (,E) . fst) . find ((== 'S') . snd) . assocs
