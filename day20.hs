@@ -29,16 +29,12 @@ getPath board p
     | board ! p == '#' = []
     | otherwise = p : (moves p >>= getPath (board // [(p, '#')]))
 
-part1 board = do
+taxiCab (xa, ya) (xb, yb) = abs (xa - xb) + abs (ya - yb)
+
+solve dist board = do
     path <- M.fromList . flip zip [1 ..] <$> (getOrigin board <&> getPath board)
-    return $ length $ concatMap (filter (>=100) . cuts board path) (M.keys path)
+    let positions = M.keys path
+        jumps = [ (path M.! a) - (path M.! b) - d | a <- positions, b <- positions, d <- [taxiCab a b], d <= dist]
+    return $ length $ filter (>=100) jumps
 
-cuts :: Board -> Path -> Pos -> [Int]
-cuts board path p =  filter (> 0) . fmap (subtract 2 . subtract (path M.! p) . (path M.!)) . filter (`M.member` path) $ jump p
-
-uniq :: [Pos] -> [Pos]
-uniq = S.toList . S.fromList
-
-jump = uniq . moves >=> moves
-
-main = getContents >>= print . part1 . parse
+main = getContents >>= print . (solve 2 &&& solve 20) . parse
